@@ -1,3 +1,0 @@
-pyinstaller --onedir --name "OneLinkIO" --icon "OneLinkIO.ico" ^
---add-data "OneLink IO BG.png;." ^
---version-file "version_info.txt" --noconsole OneLinkIO.py
