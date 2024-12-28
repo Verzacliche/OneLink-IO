@@ -7,5 +7,6 @@ OneLink IO is a user-friendly desktop application for downloading high-quality a
 
 **Note**: OneLink IO is designed to simplify your audio collection needs while providing control over quality.
 
-[Help me grow]([https://paypal.me/IamVrza])
+[Help me grow](https://paypal.me/IamVrza)
+
 
