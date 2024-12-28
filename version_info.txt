@@ -16,11 +16,11 @@ VSVersionInfo(
                     '040904E4',
                     [StringStruct('Author', 'Verza (Carlo Lugatiman)'),
                      StringStruct('FileDescription', 'OneLinkIO Downloader'),
-                     StringStruct('FileVersion', '1.0.0'),
+                     StringStruct('FileVersion', '1.0.1'),
                      StringStruct('InternalName', 'OneLinkIO'),
                      StringStruct('OriginalFilename', 'OneLinkIO.exe'),
                      StringStruct('ProductName', 'OneLinkIO'),
-                     StringStruct('ProductVersion', '1.0.0')])
+                     StringStruct('ProductVersion', '1.0.1')])
             ]
         ),
         VarFileInfo([VarStruct('Translation', [1033, 1200])])
