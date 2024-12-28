@@ -14,31 +14,55 @@ def resource_path(relative_path):
         base_path = os.path.dirname(os.path.abspath(__file__))
     return os.path.join(base_path, relative_path)
 
+def get_ffmpeg_path():
+    """Returns the path to FFmpeg, checking if it's running in a bundled app or installed."""
+    if getattr(sys, '_MEIPASS', False):
+        return os.path.join(sys._MEIPASS, 'ffmpeg', 'bin', 'ffmpeg.exe')
+    else:
+        ffmpeg_install_path = r"C:\Program Files (x86)\OneLink IO\ffmpeg\bin\ffmpeg.exe"
+        if os.path.exists(ffmpeg_install_path):
+            return ffmpeg_install_path
+        else:
+            return None  
+
 def download_audio(link, folder, format_choice, organize_playlist):
     """Download audio and organize playlists if required."""
     try:
         with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
             info = ydl.extract_info(link, download=False)
             is_playlist = 'entries' in info
-            playlist_title = info.get('title') if is_playlist and organize_playlist else None
+            playlist_title = info.get('title') if is_playlist else None
     except Exception as e:
         messagebox.showerror("Error", f"Error fetching link info: {e}")
         return
+
+    # Get FFmpeg path for postprocessing
+    ffmpeg_path = get_ffmpeg_path()
 
     # Set download options
     ydl_opts = {
         'format': 'bestaudio/best',
         'extractaudio': True,
-        'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': format_choice}],
         'quiet': False,
-        'noplaylist': not organize_playlist,
+        'ffmpeg_location': ffmpeg_path,  # Explicitly set the ffmpeg location here
+        'postprocessors': [{
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': format_choice,
+        }],
     }
 
-    if playlist_title:
-        folder_name = os.path.join(folder, playlist_title)
-        os.makedirs(folder_name, exist_ok=True)
-        ydl_opts['outtmpl'] = os.path.join(folder_name, '%(title)s.%(ext)s')
+    if organize_playlist:
+        if is_playlist:
+            # Create a folder for the playlist and organize downloaded files into that folder
+            folder_name = os.path.join(folder, playlist_title)
+            os.makedirs(folder_name, exist_ok=True)
+            ydl_opts['outtmpl'] = os.path.join(folder_name, '%(title)s.%(ext)s')
+        else:
+            # If the link is not a playlist but organize_playlist is ON, download without creating subfolders
+            ydl_opts['outtmpl'] = os.path.join(folder, '%(title)s.%(ext)s')
     else:
+        # If organize_playlist is OFF, just download all audio to the main folder
+        ydl_opts['noplaylist'] = True  # Ensures that no playlists are downloaded in this case
         ydl_opts['outtmpl'] = os.path.join(folder, '%(title)s.%(ext)s')
 
     try:
@@ -201,7 +225,7 @@ download_button = tk.Button(frame, text="Download", command=start_download, bg="
 download_button.grid(row=5, column=0, columnspan=2, pady=15)
 
 # Credit Text
-credit_label = tk.Label(root, text="An open-source project by Carlo Lugatiman (Verza - GitHub)", bg="white", fg="black", font=("Arial", 10, "italic"))
+credit_label = tk.Label(root, text="OneLink IO © 2024 by Verzacliche (Carlo Lugatiman)", bg="white", fg="black", font=("Arial", 10, "italic"))
 credit_label.place(relx=0.5, rely=0.9, anchor="center")
 
 root.mainloop()
