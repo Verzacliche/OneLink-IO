@@ -4,6 +4,7 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 from tkinter import ttk
 import yt_dlp
+import threading
 from PIL import Image, ImageTk
 
 def resource_path(relative_path):
@@ -28,10 +29,26 @@ def get_ffmpeg_path():
 def download_audio(link, folder, format_choice, organize_playlist):
     """Download audio and organize playlists if required."""
     try:
-        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
+        with yt_dlp.YoutubeDL({'quiet': True, 'progress_hooks': [progress_hook]}) as ydl:
             info = ydl.extract_info(link, download=False)
             is_playlist = 'entries' in info
             playlist_title = info.get('title') if is_playlist else None
+
+            # Filter out hidden or unavailable songs
+            if is_playlist:
+                entries = [
+                    entry for entry in info['entries']
+                    if entry and not entry.get('is_unavailable')
+                ]
+                if not entries:
+                    messagebox.showinfo("Download Complete", "No downloadable songs in the playlist.")
+                    return
+                info['entries'] = entries
+            else:
+                if info.get('is_unavailable'):
+                    messagebox.showinfo("Download Skipped", "The song is unavailable.")
+                    return
+
     except Exception as e:
         messagebox.showerror("Error", f"Error fetching link info: {e}")
         return
@@ -42,28 +59,28 @@ def download_audio(link, folder, format_choice, organize_playlist):
     # Set download options
     ydl_opts = {
         'format': 'bestaudio/best',
-        'extractaudio': True,
         'quiet': False,
-        'ffmpeg_location': ffmpeg_path,  # Explicitly set the ffmpeg location here
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': format_choice,
-        }],
+        'ffmpeg_location': ffmpeg_path,
+        'postprocessors': [
+            {
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': format_choice,
+            },
+            {
+                'key': 'FFmpegMetadata',  # Add metadata such as artist and album
+                'add_metadata': True
+            },
+        ],
+        'outtmpl': os.path.join(folder, '%(title)s.%(ext)s'),
     }
 
-    if organize_playlist:
-        if is_playlist:
-            # Create a folder for the playlist and organize downloaded files into that folder
-            folder_name = os.path.join(folder, playlist_title)
-            os.makedirs(folder_name, exist_ok=True)
-            ydl_opts['outtmpl'] = os.path.join(folder_name, '%(title)s.%(ext)s')
-        else:
-            # If the link is not a playlist but organize_playlist is ON, download without creating subfolders
-            ydl_opts['outtmpl'] = os.path.join(folder, '%(title)s.%(ext)s')
-    else:
-        # If organize_playlist is OFF, just download all audio to the main folder
-        ydl_opts['noplaylist'] = True  # Ensures that no playlists are downloaded in this case
-        ydl_opts['outtmpl'] = os.path.join(folder, '%(title)s.%(ext)s')
+    if organize_playlist and is_playlist:
+        # Create a folder for the playlist and organize downloaded files into that folder
+        folder_name = os.path.join(folder, playlist_title)
+        os.makedirs(folder_name, exist_ok=True)
+        ydl_opts['outtmpl'] = os.path.join(folder_name, '%(title)s.%(ext)s')
+    elif not organize_playlist:
+        ydl_opts['noplaylist'] = True
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -72,10 +89,27 @@ def download_audio(link, folder, format_choice, organize_playlist):
     except Exception as e:
         messagebox.showerror("Error", f"Error encountered during download: {e}")
 
+def progress_hook(d):
+    """Progress hook function to update progress in GUI."""
+    if d['status'] == 'downloading':
+        # Update progress label with the download percentage
+        progress = f"Downloading: {d['downloaded_bytes'] / d['total_bytes'] * 100:.2f}%"
+        progress_label.config(text=progress)
+
+
 def browse_folder():
     folder = filedialog.askdirectory(title="Select Download Folder")
     if folder:
         download_path.set(folder)
+
+def download_audio_thread(link, folder, format_choice, organize_playlist, progress_label):
+    """This function will run in a separate thread to prevent the GUI from freezing."""
+    try:
+        download_audio(link, folder, format_choice, organize_playlist)
+        progress_label.config(text="Download Complete!")
+    except Exception as e:
+        progress_label.config(text="Error during download")
+        messagebox.showerror("Error", f"Error encountered during download: {e}")
 
 def start_download():
     link = link_entry.get()
@@ -89,7 +123,15 @@ def start_download():
     if not folder:
         messagebox.showwarning("Error", "Please select a download folder.")
         return
-    download_audio(link, folder, format_choice, organize_playlist)
+
+    progress_label.config(text="Initializing download...")
+    
+    # Start the download in a separate thread
+    threading.Thread(
+        target=download_audio_thread,  # Call the new download function in a thread
+        args=(link, folder, format_choice, organize_playlist, progress_label),
+        daemon=True  # This ensures the thread will close when the program exits
+    ).start()
 
 def toggle_settings():
     if settings_frame.winfo_ismapped():
@@ -227,5 +269,9 @@ download_button.grid(row=5, column=0, columnspan=2, pady=15)
 # Credit Text
 credit_label = tk.Label(root, text="OneLink IO © 2024 by Verzacliche (Carlo Lugatiman)", bg="white", fg="black", font=("Arial", 10, "italic"))
 credit_label.place(relx=0.5, rely=0.9, anchor="center")
+
+# Progress Label
+progress_label = tk.Label(frame, text="Ready to download", bg="white", font=("Arial", 10))
+progress_label.grid(row=6, column=0, columnspan=2, pady=5, sticky="n")
 
 root.mainloop()
